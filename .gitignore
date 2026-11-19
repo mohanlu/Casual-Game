@@ -1,0 +1,23 @@
+# 构建与发布产物
+/build/
+/release/
+/out/
+*.exe
+*.dll
+*.o
+*.obj
+*.a
+*.lib
+*.pdb
+
+# 本地依赖与 CMake 个人配置
+/vcpkg_installed/
+/CMakeUserPresets.json
+/compile_commands.json
+
+# 编辑器临时文件
+/.vs/
+*.swp
+*.user
+Thumbs.db
+.DS_Store
