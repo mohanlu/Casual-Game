@@ -47,11 +47,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Configuration Release
 ```
 
-目前没有 `src/main.cpp`。CMake 会在构建目录内生成临时探针，检查 SDL3、图片库、字体库和 EnTT 的编译链接；检查成功后可以正常生成构建文件，此时没有游戏可执行文件。
+`src/main.cpp` 仅调用 `Windows::run()`；窗口与菜单接口在 `include/zombie/windows.h` 中声明，`src/windows.cpp` 中的具体实现保留为 TODO。目前运行程序会直接返回退出码 0。
 
-后续创建 `src/main.cpp` 后，重新运行构建脚本即可生成 `build/Debug/bin/ZombieGame.exe` 或 `build/Release/bin/ZombieGame.exe`；新增其他源文件时在 `CMakeLists.txt` 的目标中显式添加。
+运行构建脚本生成 `build/Debug/bin/ZombieGame.exe` 或 `build/Release/bin/ZombieGame.exe`；新增其他源文件时在 `CMakeLists.txt` 的目标中显式添加。
 
-入口实现后可使用：
+构建并运行：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Run
@@ -66,9 +66,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Run
 - `Ctrl+Shift+B`：Debug 构建。
 - “运行任务”：安装依赖、仅配置、Debug 构建、Release 构建。
 - CMake 预设：`windows-debug`、`windows-release`。
-- `F5`：使用 UCRT64 GDB 调试，待游戏入口实现后可用。
+- `F5`：使用 UCRT64 GDB 调试，可在 `main` 或 `Windows::run()` 设置断点。
 
-尚无源码时，IntelliSense 使用手动配置的依赖头文件路径；创建入口并构建后生成 `compile_commands.json`，供编辑器读取实际编译选项。
+构建后生成 `compile_commands.json`，供 IntelliSense 读取实际编译选项。
 
 ## 文件职责与路径调整
 
@@ -96,4 +96,4 @@ Release 发布包的 DLL／资源收集与打包在 D08 完成。
 - 项目依赖全部安装完成，包含 Debug／Release 两种配置；SDL3 使用上述兼容选项成功编译。
 - `scripts/build.ps1` 的 Debug、Release 配置及构建命令通过；C++17 探针同时引用 SDL3、SDL3_image、SDL3_ttf、EnTT，编译链接成功。
 - PowerShell 脚本及 JSON 配置通过语法检查，构建和依赖目录符合 Git 忽略规则。
-- 游戏入口尚未创建；窗口、资源加载和运行时玩法验收随下一阶段进行。
+- 游戏入口及 TODO 接口骨架已建立；窗口、资源加载和运行时玩法验收随下一阶段进行。

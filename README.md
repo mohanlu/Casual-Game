@@ -5,7 +5,7 @@ C++ 2D 俯视角僵尸生存游戏，项目目录名为 `zombie-game`。
 - [开发工作清单](worklist.md)
 - [Windows 环境与构建说明](docs/SETUP_WINDOWS.md)
 
-当前阶段：搭建开发环境，游戏入口与玩法将在后续实现。
+当前阶段：开发环境和程序入口已建立，窗口与菜单接口以 TODO 占位，玩法将在后续实现。
 
 技术栈：C++17、SDL3、SDL3_image、SDL3_ttf、EnTT、CMake、Ninja、vcpkg。
 
@@ -21,4 +21,4 @@ C++ 2D 俯视角僵尸生存游戏，项目目录名为 `zombie-game`。
 | `CMakeLists.txt`、`CMakePresets.json` | CMake 在根目录查找的构建入口 |
 | `build/`、`vcpkg_installed/` | 本机生成的构建产物和依赖，不纳入 Git |
 
-后续 C++ 头文件放入 `include/`，实现文件放入 `src/`。
+C++ 头文件放入 `include/`，实现文件放入 `src/`。`src/main.cpp` 仅调用启动入口；`include/zombie/windows.h` 声明窗口与菜单接口，`src/windows.cpp` 保留对应 TODO。
