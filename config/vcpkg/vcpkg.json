@@ -1,0 +1,14 @@
+{
+  "name": "zombie-game",
+  "version-string": "0.1.0",
+  "builtin-baseline": "177e8175121536d414f405ed8b3099b325a42638",
+  "dependencies": [
+    "sdl3",
+    { "name": "sdl3-image", "default-features": false, "features": ["png"] },
+    { "name": "sdl3-ttf", "default-features": false },
+    "entt"
+  ],
+  "overrides": [
+    { "name": "entt", "version": "3.12.0" }
+  ]
+}
