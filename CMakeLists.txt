@@ -13,12 +13,24 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 include(config/cmake/Dependencies.cmake)
 
-add_executable(ZombieGame
-    src/main.cpp
+add_library(zombie_runtime
     src/windows.cpp
+    src/input.cpp
+    src/resources.cpp
 )
-target_link_libraries(ZombieGame PRIVATE zombie_dependencies)
-target_include_directories(ZombieGame PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(zombie_runtime PUBLIC zombie_dependencies)
+target_include_directories(zombie_runtime PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+add_executable(ZombieGame src/main.cpp)
+target_link_libraries(ZombieGame PRIVATE zombie_runtime)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(ZombieGame PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(zombie_runtime PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(runtime_tests tests/runtime_tests.cpp)
+    target_link_libraries(runtime_tests PRIVATE zombie_runtime)
+    add_test(NAME runtime_foundation COMMAND runtime_tests)
+    set_tests_properties(runtime_foundation PROPERTIES TIMEOUT 15
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
 endif()

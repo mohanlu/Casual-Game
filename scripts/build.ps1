@@ -3,12 +3,13 @@ param(
     [string]$Configuration = 'Debug',
     [switch]$ConfigureOnly,
     [switch]$Run,
+    [switch]$Test,
     [string]$VcpkgRoot = 'D:\vcpkg',
     [string]$CompilerRoot = 'C:\msys64\ucrt64'
 )
 
 $ErrorActionPreference = 'Stop'
-if ($ConfigureOnly -and $Run) { throw 'Choose either -ConfigureOnly or -Run.' }
+if ($ConfigureOnly -and ($Run -or $Test)) { throw '-ConfigureOnly cannot be combined with -Run or -Test.' }
 $projectRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'toolchain.ps1')
 $toolchain = Get-ZombieToolchain -VcpkgRoot $VcpkgRoot -CompilerRoot $CompilerRoot
@@ -34,6 +35,12 @@ try {
         if (!$ConfigureOnly) {
             & $toolchain.CMake --build --preset $preset
             if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+        }
+
+        if ($Test) {
+            $ctest = Join-Path (Split-Path $toolchain.CMake) 'ctest.exe'
+            & $ctest --test-dir $buildDir --output-on-failure --no-tests=error
+            if ($LASTEXITCODE -ne 0) { throw 'Runtime tests failed.' }
         }
 
         if ($Run) {

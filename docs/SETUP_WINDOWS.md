@@ -47,7 +47,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Configuration Release
 ```
 
-`src/main.cpp` 仅调用 `Windows::run()`；窗口与菜单接口在 `include/zombie/windows.h` 中声明，`src/windows.cpp` 中的具体实现保留为 TODO。目前运行程序会直接返回退出码 0。
+`src/main.cpp` 仅调用 `Windows::run()`。程序创建 960×720 可调整大小的深色窗口；关闭窗口退出。Esc 等按键由输入层记录，暂停菜单在 D02 接入。
+
+逻辑按 60 Hz 固定步长更新，渲染优先使用垂直同步，无垂直同步时限速至约 60 FPS。失焦或最小化时停止逻辑更新并清空按键状态，恢复时丢弃后台经过的时间；单帧最多追赶 0.25 秒。
+
+`Resources` 从可执行文件旁的 `assets/` 加载并缓存纹理与字体，加载失败报告文件路径及 SDL 错误。返回的指针由缓存持有，调用 `clear()` 或销毁缓存后失效。释放顺序为资源缓存、渲染器、窗口、TTF、SDL。具体图集及字体素材随后接入。
 
 运行构建脚本生成 `build/Debug/bin/ZombieGame.exe` 或 `build/Release/bin/ZombieGame.exe`；新增其他源文件时在 `CMakeLists.txt` 的目标中显式添加。
 
@@ -58,6 +62,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Run
 ```
 
 `-Run` 会临时加入对应配置的依赖 DLL 路径，并以可执行文件目录为工作目录运行。
+
+运行基础测试：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Test
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Configuration Release -Test
+```
+
+测试由 CTest 使用 SDL 的无显示视频驱动运行，覆盖不同渲染频率下的固定更新时间、短按和重复按键、失焦清理、纹理缓存、资源加载失败、重复启动关闭和初始化失败清理。
 
 ## VS Code
 
@@ -96,4 +109,11 @@ Release 发布包的 DLL／资源收集与打包在 D08 完成。
 - 项目依赖全部安装完成，包含 Debug／Release 两种配置；SDL3 使用上述兼容选项成功编译。
 - `scripts/build.ps1` 的 Debug、Release 配置及构建命令通过；C++17 探针同时引用 SDL3、SDL3_image、SDL3_ttf、EnTT，编译链接成功。
 - PowerShell 脚本及 JSON 配置通过语法检查，构建和依赖目录符合 Git 忽略规则。
-- 游戏入口及 TODO 接口骨架已建立；窗口、资源加载和运行时玩法验收随下一阶段进行。
+- 当时已建立游戏入口及 TODO 接口骨架。
+
+## 运行基础验证（2026-11-25）
+
+- Debug、Release 构建与 CTest 运行基础测试通过。
+- 使用本机真实视频驱动完成短时窗口创建、渲染和正常关闭；初始化失败返回非零退出码并清理子系统。
+- 从项目外工作目录运行测试仍能加载可执行文件旁的测试资源。
+- 菜单绘制、图集与字体素材接入、具体游戏逻辑留在后续阶段实现。
