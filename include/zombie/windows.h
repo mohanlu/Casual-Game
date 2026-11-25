@@ -3,6 +3,7 @@
 #include "zombie/fixed_step.h"
 #include "zombie/input.h"
 #include "zombie/resources.h"
+#include "zombie/graphics.h"
 
 namespace zombie {
 
@@ -27,6 +28,7 @@ private:
     std::unique_ptr<SDL_Window, SdlDeleter> window_;
     std::unique_ptr<SDL_Renderer, SdlDeleter> renderer_;
     std::unique_ptr<Resources> resources_;
+    std::unique_ptr<GameGraphics> graphics_;
     Input input_;
     FixedStep clock_;
     bool sdlInitialized_ = false;

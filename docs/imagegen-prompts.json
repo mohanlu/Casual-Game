@@ -1,0 +1,46 @@
+{
+  "tool": "built-in image_gen",
+  "style": "俯视像素风；角色和物品透明背景；最终32×32；图集160×64。",
+  "prompts": [
+    {
+      "asset": "player.png",
+      "prompt": "Use case: stylized-concept. Asset type: production-ready 32x32 pixel-art sprite for a 2D top-down zombie game. Create exactly ONE sprite, not a spritesheet. Visual design must be drawn on a strict 32 by 32 logical pixel grid with big crisp uniform square pixels, a small cohesive muted palette, simple strong silhouette, thin dark pixel outline, no antialiasing or smooth gradients. Square image. Use a strictly overhead 90-degree orthographic camera, NOT a front or side portrait or isometric view. Character head/shoulders visible from above, face and arms point toward the right edge. Character/item centered and fits entirely within the inner 28 by 28 logical pixels. No text, labels, watermark, frame, floor shadow or extra sprites. If transparent background is specified, genuine alpha outside the character/item, no checkerboard. If floor/wall tile, fill entire canvas opaquely and ignore inner margin and character instructions. Requested subject: A surviving human player character wearing a dark teal jacket and dark trousers, with a small handgun pointed to the RIGHT. Normal standing/combat pose."
+    },
+    {
+      "asset": "player_hurt.png",
+      "prompt": "Use case: precise-object-edit. Edit target: supplied player sprite. Create a HURT-state sprite. Preserve EXACT silhouette, pixel grid, size, center, overhead camera, position, clothing, face direction right, weapon, transparency. Change only a few jacket pixels to rusty red damage marks and add a noticeable muted red hurt-flash tint to the character, no gore. No other changes, no text."
+    },
+    {
+      "asset": "player_dead.png",
+      "prompt": "Use case: identity-preserve. Edit target: player sprite. Create the DEAD-state sprite of this exact character, retaining teal jacket, brown hair, handgun and dark trousers. Straight-down overhead view of character lying motionless on the floor, head toward RIGHT, feet toward LEFT, compact prone silhouette centered on same square canvas. Body stretched horizontally but fits inner 28/32 of image with transparency all around. Pixel-art, consistent palette and thick pixel grid, no floor, no shadow, no gore, no text. Clearly prone instead of standing."
+    },
+    {
+      "asset": "zombie.png",
+      "prompt": "Use case: precise-object-edit. Image 1 edit target: zombie; image 2 camera/composition reference: human player. Correct zombie camera to match player's STRICTLY STRAIGHT-DOWN overhead camera, not side-view. Keep zombie identity green skin, brown torn jacket, dark hair. Show top of head centered, shoulders above/below head and TWO arms reaching toward RIGHT, feet on left/back partly occluded like overhead reference. No large visible frontal face or full vertical legs. Same compact size and pixel grid as player. Genuine transparent background, centered, no floor or text. Normal zombie state."
+    },
+    {
+      "asset": "zombie_hurt.png",
+      "prompt": "Edit this zombie sprite into its HURT state. Preserve exact overhead pose, center, silhouette, arm locations, head location, rightward facing, scale, pixel-grid style and transparency. Add noticeable rusty-red hurt-flash tint and a couple of small red clothing damage pixels, no gore. Same character brown jacket and green skin. No scene, shadows, text or additional objects."
+    },
+    {
+      "asset": "zombie_dead.png",
+      "prompt": "Create DEAD-state of this exact zombie in same pixel-art game. Preserve identity: green skin, dark brown hair, torn brown jacket and dark trousers. Strict straight-down overhead view. Zombie lies motionless prone, head pointing RIGHT, feet LEFT, body elongated horizontally, arms resting limply at sides rather than reaching. Center sprite, fits inside square with transparent border; compact pixel-art silhouette. No floor, shadows, gore, extra objects or text. Genuine alpha background."
+    },
+    {
+      "asset": "ammo.png",
+      "prompt": "Use case: stylized-concept. Asset type: production-ready 32x32 pixel-art sprite for a 2D top-down zombie game. Create exactly ONE sprite, not a spritesheet. Visual design must be drawn on a strict 32 by 32 logical pixel grid with big crisp uniform square pixels, a small cohesive muted palette, simple strong silhouette, thin dark pixel outline, no antialiasing or smooth gradients. Square image. Use a strictly overhead 90-degree orthographic camera, NOT a front or side portrait or isometric view. Character head/shoulders visible from above, face and arms point toward the right edge. Character/item centered and fits entirely within the inner 28 by 28 logical pixels. No text, labels, watermark, frame, floor shadow or extra sprites. If transparent background is specified, genuine alpha outside the character/item, no checkerboard. If floor/wall tile, fill entire canvas opaquely and ignore inner margin and character instructions. Requested subject: One closed olive green ammunition box with a small stack of three brass cartridges next to it. Clearly recognizable at tiny size."
+    },
+    {
+      "asset": "health.png",
+      "prompt": "Use case: stylized-concept. Asset type: production-ready 32x32 pixel-art sprite for a 2D top-down zombie game. Create exactly ONE sprite, not a spritesheet. Visual design must be drawn on a strict 32 by 32 logical pixel grid with big crisp uniform square pixels, a small cohesive muted palette, simple strong silhouette, thin dark pixel outline, no antialiasing or smooth gradients. Square image. Use a strictly overhead 90-degree orthographic camera, NOT a front or side portrait or isometric view. Character head/shoulders visible from above, face and arms point toward the right edge. Character/item centered and fits entirely within the inner 28 by 28 logical pixels. No text, labels, watermark, frame, floor shadow or extra sprites. If transparent background is specified, genuine alpha outside the character/item, no checkerboard. If floor/wall tile, fill entire canvas opaquely and ignore inner margin and character instructions. Requested subject: One compact white and muted red first-aid pouch with a simple white plus sign on its red flap. Clearly recognizable at tiny size."
+    },
+    {
+      "asset": "ground.png",
+      "prompt": "Use case: stylized-concept. Asset type: production-ready 32x32 pixel-art sprite for a 2D top-down zombie game. Create exactly ONE sprite, not a spritesheet. Visual design must be drawn on a strict 32 by 32 logical pixel grid with big crisp uniform square pixels, a small cohesive muted palette, simple strong silhouette, thin dark pixel outline, no antialiasing or smooth gradients. Square image. Use a strictly overhead 90-degree orthographic camera, NOT a front or side portrait or isometric view. Character head/shoulders visible from above, face and arms point toward the right edge. Character/item centered and fits entirely within the inner 28 by 28 logical pixels. No text, labels, watermark, frame, floor shadow or extra sprites. If transparent background is specified, genuine alpha outside the character/item, no checkerboard. If floor/wall tile, fill entire canvas opaquely and ignore inner margin and character instructions. Requested subject: A full-bleed seamless tile of worn dark grey concrete floor, subtle small cracks and tiny speckles. Orthographic straight-down texture, flat and walkable; no objects or border; all four edges seamlessly repeat."
+    },
+    {
+      "asset": "wall.png",
+      "prompt": "Use case: stylized-concept. Asset type: production-ready 32x32 pixel-art sprite for a 2D top-down zombie game. Create exactly ONE sprite, not a spritesheet. Visual design must be drawn on a strict 32 by 32 logical pixel grid with big crisp uniform square pixels, a small cohesive muted palette, simple strong silhouette, thin dark pixel outline, no antialiasing or smooth gradients. Square image. Use a strictly overhead 90-degree orthographic camera, NOT a front or side portrait or isometric view. Character head/shoulders visible from above, face and arms point toward the right edge. Character/item centered and fits entirely within the inner 28 by 28 logical pixels. No text, labels, watermark, frame, floor shadow or extra sprites. If transparent background is specified, genuine alpha outside the character/item, no checkerboard. If floor/wall tile, fill entire canvas opaquely and ignore inner margin and character instructions. Requested subject: A full-bleed seamless tile of solid grey masonry wall seen strictly from straight above: tightly fitted chunky stone blocks and dark mortar joints, distinctly lighter than dark concrete floor. It represents an occupied obstacle tile. No front-facing vertical wall facade, no perspective, no borders. All edges repeat."
+    }
+  ]
+}

@@ -119,6 +119,69 @@ void testLifecycle() {
     check(SDL_WasInit(0) == 0 && TTF_WasInit() == 0, "Partial initialization leak");
     SDL_ResetHint(SDL_HINT_RENDER_DRIVER);
 }
+
+void testGraphics() {
+    check(SDL_Init(SDL_INIT_VIDEO) && TTF_Init(), SDL_GetError());
+    {
+        std::unique_ptr<SDL_Window, zombie::SdlDeleter> window(SDL_CreateWindow("graphics", 64, 64, 0));
+        std::unique_ptr<SDL_Renderer, zombie::SdlDeleter> renderer(SDL_CreateRenderer(window.get(), nullptr));
+        check(renderer != nullptr, SDL_GetError());
+        const auto root = std::filesystem::u8path(SDL_GetBasePath()) / "graphics-fixture";
+        std::filesystem::create_directories(root / "images");
+        zombie::Resources resources(renderer.get(), root);
+        auto saveImage = [&](int width, int height, const char* name) {
+            std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> surface(
+                SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA32), SDL_DestroySurface);
+            check(surface != nullptr, SDL_GetError());
+            SDL_FillSurfaceRect(surface.get(), nullptr, SDL_MapSurfaceRGB(surface.get(), 0, 255, 0));
+            SDL_Rect left{0, 0, 16, 32}, right{16, 0, 16, 32};
+            SDL_FillSurfaceRect(surface.get(), &left, SDL_MapSurfaceRGB(surface.get(), 255, 0, 0));
+            SDL_FillSurfaceRect(surface.get(), &right, SDL_MapSurfaceRGB(surface.get(), 0, 0, 255));
+            check(IMG_SavePNG(surface.get(), (root / "images" / name).u8string().c_str()), SDL_GetError());
+        };
+        auto pixel = [&](int x, int y, Uint8 red, Uint8 green, Uint8 blue) {
+            SDL_Rect area{x, y, 1, 1};
+            std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> surface(
+                SDL_RenderReadPixels(renderer.get(), &area), SDL_DestroySurface);
+            check(surface != nullptr, SDL_GetError());
+            Uint8 r, g, b, a;
+            check(SDL_ReadSurfacePixel(surface.get(), 0, 0, &r, &g, &b, &a), SDL_GetError());
+            check(r == red && g == green && b == blue, "Unexpected rendered pixel");
+        };
+        saveImage(32, 32, "player.png");
+        zombie::GameGraphics graphics;
+        graphics.load(resources, renderer.get());
+        check(graphics.sprite(zombie::SpriteId::player).texture != nullptr, "Separate PNG loading");
+        check(graphics.sprite(zombie::SpriteId::health).texture == nullptr, "Missing asset handling");
+        saveImage(160, 64, "atlas.png");
+        graphics.load(resources, renderer.get());
+        const SDL_FRect destination{0, 0, 32, 32};
+        graphics.sprite(zombie::actorSprite(zombie::ActorType::player, zombie::VisualState::normal))
+            .draw(renderer.get(), destination, 90);
+        pixel(16, 8, 255, 0, 0);
+        pixel(16, 24, 0, 0, 255);
+        graphics.sprite(zombie::actorSprite(zombie::ActorType::player, zombie::VisualState::hurt))
+            .draw(renderer.get(), destination);
+        pixel(16, 16, 0, 255, 0);
+        check(graphics.sprite(zombie::actorSprite(zombie::ActorType::zombie, zombie::VisualState::dead))
+            .source.y == 32, "Death state selects second row");
+        zombie::TextLabel label;
+        // 仅测试时读取本机字体，不将系统字体复制到项目或发布包。
+        auto* font = resources.font("C:/Windows/Fonts/arial.ttf", 18);
+        check(font == resources.font("C:/Windows/Fonts/arial.ttf", 18), "Font cache");
+        label.set(renderer.get(), font, "HP 100");
+        check(label.width() > 0 && label.height() > 0, "Text texture dimensions");
+        label.draw(renderer.get(), 0, 32);
+        label.set(renderer.get(), font, "");
+        check(label.width() == 0 && label.height() == 0, "Clear text");
+        std::filesystem::remove(root / "images/player.png");
+        std::filesystem::remove(root / "images/atlas.png");
+        std::filesystem::remove(root / "images");
+        std::filesystem::remove(root);
+    }
+    TTF_Quit();
+    SDL_Quit();
+}
 }
 
 int main() {
@@ -129,6 +192,8 @@ int main() {
         std::cout << "Input passed" << std::endl;
         testResources();
         std::cout << "Resources passed" << std::endl;
+        testGraphics();
+        std::cout << "Graphics passed" << std::endl;
         testLifecycle();
         std::cout << "Runtime foundation checks passed\n";
         return 0;

@@ -17,11 +17,23 @@ add_library(zombie_runtime
     src/windows.cpp
     src/input.cpp
     src/resources.cpp
+    src/graphics.cpp
+    src/entity.cpp
+    src/item.cpp
 )
 target_link_libraries(zombie_runtime PUBLIC zombie_dependencies)
 target_include_directories(zombie_runtime PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 add_executable(ZombieGame src/main.cpp)
 target_link_libraries(ZombieGame PRIVATE zombie_runtime)
+add_custom_target(copy_assets ALL
+    COMMAND "${CMAKE_COMMAND}"
+        "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/images"
+        "-DDESTINATION=$<TARGET_FILE_DIR:ZombieGame>/assets/images"
+        "-DBINARY_ROOT=${CMAKE_BINARY_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/config/cmake/CopyAssets.cmake"
+    COMMENT "Copy images and fonts"
+)
+add_dependencies(ZombieGame copy_assets)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(zombie_runtime PRIVATE -Wall -Wextra -Wpedantic)
 endif()

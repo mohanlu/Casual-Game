@@ -4,8 +4,9 @@ C++ 2D 俯视角僵尸生存游戏，项目目录名为 `zombie-game`。
 
 - [开发工作清单](worklist.md)
 - [Windows 环境与构建说明](docs/SETUP_WINDOWS.md)
+- [图片与字体清单](docs/ASSETS.md)
 
-当前阶段：窗口、渲染器、输入事件、60 Hz 固定逻辑循环及资源管理已实现。启动后显示可调整大小的深色空白窗口，菜单和玩法将在后续实现。
+当前阶段：窗口运行基础及素材绘制接口已实现。将图片和字体放入 `src/images/` 后重新构建，即可查看选区、状态图和旋转预览。菜单和玩法将在后续实现。
 
 技术栈：C++17、SDL3、SDL3_image、SDL3_ttf、EnTT、CMake、Ninja、vcpkg。
 
