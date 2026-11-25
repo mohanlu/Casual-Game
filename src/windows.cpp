@@ -23,6 +23,8 @@ void Windows::initialize() {
     require(renderer_ != nullptr, "SDL_CreateRenderer");
     vsync_ = SDL_SetRenderVSync(renderer_.get(), 1);
     resources_ = std::make_unique<Resources>(renderer_.get());
+    graphics_ = std::make_unique<GameGraphics>();
+    graphics_->load(*resources_, renderer_.get());
     focused_ = (SDL_GetWindowFlags(window_.get()) & SDL_WINDOW_INPUT_FOCUS) != 0;
     minimized_ = false;
     input_ = {};
@@ -95,11 +97,13 @@ void Windows::render() {
     require(SDL_SetRenderDrawColor(renderer_.get(), 24, 28, 34, 255), "Draw color");
     require(SDL_RenderClear(renderer_.get()), "Render clear");
     showMainMenu();
+    graphics_->drawPreview(renderer_.get());
     require(SDL_RenderPresent(renderer_.get()), "Render present");
 }
 
 void Windows::shutdown() {
     running_ = false;
+    graphics_.reset();
     resources_.reset();
     renderer_.reset();
     window_.reset();

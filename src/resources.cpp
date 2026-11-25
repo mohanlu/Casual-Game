@@ -5,10 +5,10 @@
 
 namespace zombie {
 
-Resources::Resources(SDL_Renderer* renderer) : renderer_(renderer) {
+Resources::Resources(SDL_Renderer* renderer, std::filesystem::path root) : renderer_(renderer) {
     const char* base = SDL_GetBasePath();
     if (!renderer_ || !base) { throw std::runtime_error("Resource initialization failed"); }
-    root_ = std::filesystem::u8path(base) / "assets";
+    root_ = root.empty() ? std::filesystem::u8path(base) / "assets" : std::move(root);
 }
 
 SDL_Texture* Resources::texture(const std::string& relativePath) {
