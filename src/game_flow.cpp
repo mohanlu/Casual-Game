@@ -3,8 +3,10 @@
 namespace zombie {
 void GameFlow::enter(GameState state) { state_ = state; ++revision_; }
 
-bool GameFlow::startGame() {
+bool GameFlow::startGame(int zombieCount) {
     if (state_ != GameState::MainMenu) { return false; }
+    if (zombieCount != 50 && zombieCount != 100 && zombieCount != 200) { return false; }
+    zombieTarget_ = zombieCount;
     playTime_ = 0;
     enter(GameState::Playing);
     return true;
