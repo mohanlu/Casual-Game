@@ -2,6 +2,7 @@
 #include <SDL3_image/SDL_image.h>
 #include <cmath>
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <thread>
 
@@ -30,6 +31,76 @@ void testClock() {
     clock.reset();
     clock.advance(0.01, [&](double) { ++count; });
     check(count == 15, "Reset must discard accumulated time");
+}
+
+void testPauseClock() {
+    zombie::GameClock clock;
+    zombie::GameFlow flow;
+    check(flow.startGame(), "Start clock test session");
+    int steps = 0;
+    double cooldown = 0.1;
+    auto update = [&](double dt) {
+        ++steps;
+        flow.update(dt);
+        cooldown -= dt;
+    };
+    clock.reset(0);
+    clock.setRunning(true);
+    clock.advanceTo(10'000'000, update); // 暂停前累计 10 ms，不足一步。
+    check(steps == 0, "Substep must remain pending");
+    flow.pause();
+    clock.setRunning(false);
+    clock.advanceTo(5'000'000'000, update);
+    clock.advanceTo(10'000'000'000, update); // 包括停留在设置页的时间。
+    check(steps == 0 && flow.playTime() == 0 && cooldown == 0.1, "Pause must freeze game time and cooldown");
+    flow.resume();
+    clock.setRunning(true);
+    clock.advanceTo(10'006'000'000, update);
+    check(steps == 0, "Resume must not catch up paused wall time");
+    clock.advanceTo(10'006'666'667, update);
+    check(steps == 1 && std::abs(flow.playTime() - zombie::FixedStep::interval) < 1e-12,
+        "Resume must use the saved 10 ms remainder");
+    check(std::abs(cooldown - (0.1 - zombie::FixedStep::interval)) < 1e-12, "Cooldown continues from saved progress");
+
+    // 对比连续运行与反复暂停：活跃时间相同，逻辑步数及最终余量必须相同。
+    zombie::GameClock continuous, interrupted;
+    continuous.reset(0);
+    interrupted.reset(0);
+    continuous.setRunning(true);
+    interrupted.setRunning(true);
+    std::uint64_t activeTime = 0, wallTime = 0;
+    int continuousSteps = 0, interruptedSteps = 0;
+    auto countContinuous = [&](double) { ++continuousSteps; };
+    auto countInterrupted = [&](double) { ++interruptedSteps; };
+    for (int i = 0; i < 100; ++i) {
+        activeTime += 5'000'000;
+        wallTime += 5'000'000;
+        continuous.advanceTo(activeTime, countContinuous);
+        interrupted.advanceTo(wallTime, countInterrupted);
+        interrupted.setRunning(false);
+        wallTime += 2'000'000'000;
+        interrupted.advanceTo(wallTime, countInterrupted);
+        interrupted.setRunning(true);
+        check(continuousSteps == interruptedSteps, "Repeated pause loses active time");
+    }
+    check(interruptedSteps == 30, "500 ms active time must produce 30 steps");
+    continuous.advanceTo(activeTime + 16'666'667, countContinuous);
+    interrupted.advanceTo(wallTime + 16'666'667, countInterrupted);
+    check(continuousSteps == 31 && interruptedSteps == 31, "Pause must preserve residual phase");
+
+    // 新一局才清空余量；迟到的事件不能倒退时间。
+    clock.reset(0);
+    clock.setRunning(true);
+    steps = 0;
+    clock.advanceTo(10'000'000, update);
+    clock.startNewGame();
+    clock.advanceTo(16'000'000, update);
+    check(steps == 0, "New game must clear old remainder");
+    clock.advanceTo(5'000'000, update);
+    clock.advanceTo(20'000'000, update);
+    check(steps == 0, "Stale timestamps must not double count time");
+    clock.advanceTo(26'666'667, update);
+    check(steps == 1, "New game clock must advance normally");
 }
 
 void testInput() {
@@ -131,6 +202,79 @@ void testLifecycle() {
     SDL_ResetHint(SDL_HINT_RENDER_DRIVER);
 }
 
+void testPauseSettingsFlow() {
+    for (bool escapeBack : {false, true}) {
+        zombie::Windows window;
+        std::thread events([escapeBack] {
+            SDL_Delay(200);
+            auto sendKey = [](SDL_Scancode key, bool repeat = false) {
+                SDL_Event e{};
+                e.type = SDL_EVENT_KEY_DOWN;
+                e.key.scancode = key;
+                e.key.repeat = repeat;
+                SDL_PushEvent(&e);
+            };
+            auto click = [](float x, float y) {
+                SDL_Event e{};
+                e.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+                e.button.button = SDL_BUTTON_LEFT;
+                e.button.x = x; e.button.y = y;
+                SDL_PushEvent(&e);
+                e.type = SDL_EVENT_MOUSE_BUTTON_UP;
+                SDL_PushEvent(&e);
+            };
+            SDL_Event e{};
+            e.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
+            SDL_PushEvent(&e);
+            click(480, 380); // 开始游戏
+            sendKey(SDL_SCANCODE_P);
+            sendKey(SDL_SCANCODE_P, true); // 长按不能恢复
+            click(480, 425); // 暂停 -> 设置
+            sendKey(SDL_SCANCODE_SPACE); // 设置内不能恢复游戏
+            sendKey(SDL_SCANCODE_P);
+            click(600, 385); // 已锁定的僵尸选项
+            if (escapeBack) { sendKey(SDL_SCANCODE_ESCAPE); }
+            else { click(480, 570); }
+            click(480, 370); // 返回暂停菜单后继续
+            sendKey(SDL_SCANCODE_ESCAPE); // 再次暂停
+            e.type = SDL_EVENT_QUIT;
+            SDL_PushEvent(&e);
+        });
+        const int result = window.run();
+        events.join();
+        check(result == 0 && window.state() == zombie::GameState::Paused,
+            "Settings must return to pause menu and preserve pause hotkeys");
+    }
+}
+
+void testSettings() {
+    const auto path = std::filesystem::current_path() / "test-display-settings.ini";
+    std::filesystem::remove(path);
+    zombie::Settings settings;
+    settings.loadDisplay(path);
+    check(!settings.fullscreen && settings.zombieCount == 50, "Default settings");
+    settings.fullscreen = true;
+    check(settings.saveDisplay(path), "Save fullscreen");
+    zombie::Settings reopened;
+    reopened.loadDisplay(path);
+    check(reopened.fullscreen, "Restore fullscreen on reopen");
+    reopened.fullscreen = false;
+    check(reopened.saveDisplay(path), "Save windowed");
+    settings.loadDisplay(path);
+    check(!settings.fullscreen, "Restore windowed on reopen");
+    { std::ofstream file(path); file << "invalid"; }
+    settings.fullscreen = true;
+    settings.loadDisplay(path);
+    check(!settings.fullscreen, "Invalid settings fallback");
+    check(!settings.saveDisplay(path / "missing"), "Save failure reported");
+    std::filesystem::remove(path);
+    for (int target : {50, 100, 200}) {
+        zombie::GameFlow flow;
+        check(!flow.startGame(75), "Reject invalid zombie count");
+        check(flow.startGame(target) && flow.zombieTarget() == target, "Session uses selected count");
+    }
+}
+
 void testGameFlow() {
     zombie::GameFlow flow;
     using S = zombie::GameState;
@@ -188,7 +332,20 @@ void testMenus() {
             event.key.scancode = SDL_SCANCODE_RETURN;
             const A first = states[index] == S::MainMenu ? A::Start : states[index] == S::Playing ? A::None :
                 states[index] == S::Paused ? A::Resume : A::MainMenu;
-            check(menu.handleEvent(event) == first, "Menu first action");
+            check(menu.handleEvent(event) == A::None, "Keyboard confirmation removed");
+            for (auto key : {SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_UP, SDL_SCANCODE_DOWN}) {
+                event.key.scancode = key;
+                check(menu.handleEvent(event) == A::None, "Keyboard navigation removed");
+            }
+            event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            event.button.button = SDL_BUTTON_LEFT;
+            event.button.x = 480; event.button.y = 380;
+            menu.handleEvent(event);
+            event.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            check(menu.handleEvent(event) == first, "Menu first mouse action");
+            event = {};
+            event.type = SDL_EVENT_KEY_DOWN;
+            event.key.scancode = SDL_SCANCODE_RETURN;
             event.key.repeat = true;
             check(menu.handleEvent(event) == A::None, "Repeated confirmation");
         }
@@ -206,6 +363,61 @@ void testMenus() {
         menu.handleEvent(event);
         event.type = SDL_EVENT_MOUSE_BUTTON_UP;
         check(menu.handleEvent(event) == A::Start, "Mouse click activation");
+        auto click = [&](float x, float y) {
+            SDL_Event e{};
+            e.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            e.button.button = SDL_BUTTON_LEFT;
+            e.button.x = x; e.button.y = y;
+            menu.handleEvent(e);
+            e.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            return menu.handleEvent(e);
+        };
+        check(click(480, 450) == A::Settings, "Main menu settings entry");
+        check(click(480, 520) == A::Quit, "Main menu quit");
+        zombie::Settings settings;
+        settings.zombieCount = 100;
+        menu.rebuild(S::MainMenu, resources, renderer.get(), settings, true);
+        SDL_RenderClear(renderer.get());
+        menu.draw(renderer.get());
+        if (const char* output = SDL_getenv("ZOMBIE_UI_SNAPSHOTS")) {
+            std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> snapshot(
+                SDL_RenderReadPixels(renderer.get(), nullptr), SDL_DestroySurface);
+            check(snapshot && IMG_SavePNG(snapshot.get(), (std::filesystem::u8path(output) / "settings.png").u8string().c_str()), SDL_GetError());
+        }
+        check(click(350, 385) == A::Zombies50 && click(475, 385) == A::Zombies100 &&
+            click(600, 385) == A::Zombies200, "Zombie choices");
+        check(click(380, 485) == A::Windowed && click(570, 485) == A::Fullscreen, "Display choices");
+        check(click(480, 570) == A::Back && click(250, 650) == A::None, "Settings return and outside click");
+        menu.rebuild(S::Paused, resources, renderer.get(), settings);
+        check(click(480, 425) == A::Settings, "Pause menu settings entry");
+        check(click(480, 485) == A::MainMenu && click(480, 545) == A::Quit, "Pause menu remaining buttons");
+        menu.rebuild(S::Paused, resources, renderer.get(), settings, true);
+        check(click(350, 385) == A::None && click(475, 385) == A::None &&
+            click(600, 385) == A::None, "Paused zombie choices must be disabled");
+        check(click(380, 485) == A::Windowed && click(570, 485) == A::Fullscreen,
+            "Paused display choices remain enabled");
+        check(click(480, 570) == A::Back, "Paused settings return");
+        SDL_RenderClear(renderer.get());
+        menu.draw(renderer.get());
+        if (const char* output = SDL_getenv("ZOMBIE_UI_SNAPSHOTS")) {
+            std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> snapshot(
+                SDL_RenderReadPixels(renderer.get(), nullptr), SDL_DestroySurface);
+            check(snapshot && IMG_SavePNG(snapshot.get(), (std::filesystem::u8path(output) / "paused-settings.png").u8string().c_str()), SDL_GetError());
+        }
+        if (std::string(SDL_GetCurrentVideoDriver()) != "dummy") {
+            check(SDL_SetWindowFullscreen(window.get(), true) && SDL_SyncWindow(window.get()), "Enter fullscreen");
+            check((SDL_GetWindowFlags(window.get()) & SDL_WINDOW_FULLSCREEN) != 0, "Fullscreen flag");
+            float x = 0, y = 0;
+            check(SDL_RenderCoordinatesToWindow(renderer.get(), 480, 485, &x, &y), "Fullscreen coordinate mapping");
+            SDL_Event mapped{};
+            mapped.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            mapped.button.windowID = SDL_GetWindowID(window.get());
+            mapped.button.x = x; mapped.button.y = y;
+            check(SDL_ConvertEventToRenderCoordinates(renderer.get(), &mapped), "Fullscreen input mapping");
+            check(std::abs(mapped.button.x - 480) < 1 && std::abs(mapped.button.y - 485) < 1, "Fullscreen click position");
+            check(SDL_SetWindowFullscreen(window.get(), false) && SDL_SyncWindow(window.get()), "Leave fullscreen");
+            check((SDL_GetWindowFlags(window.get()) & SDL_WINDOW_FULLSCREEN) == 0, "Windowed flag");
+        }
         SDL_SetWindowSize(window.get(), 1280, 720);
         SDL_PumpEvents();
         event.button.windowID = SDL_GetWindowID(window.get());
@@ -285,6 +497,7 @@ void testGraphics() {
 int main() {
     try {
         testClock();
+        testPauseClock();
         std::cout << "Clock passed" << std::endl;
         testInput();
         std::cout << "Input passed" << std::endl;
@@ -292,9 +505,11 @@ int main() {
         std::cout << "Resources passed" << std::endl;
         testGraphics();
         std::cout << "Graphics passed" << std::endl;
+        testSettings();
         testGameFlow();
         testMenus();
         std::cout << "Game flow and menus passed" << std::endl;
+        testPauseSettingsFlow();
         testLifecycle();
         std::cout << "Runtime foundation checks passed\n";
         return 0;

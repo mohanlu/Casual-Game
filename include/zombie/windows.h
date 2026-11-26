@@ -1,6 +1,6 @@
 #pragma once
 
-#include "zombie/fixed_step.h"
+#include "zombie/game_clock.h"
 #include "zombie/input.h"
 #include "zombie/resources.h"
 #include "zombie/graphics.h"
@@ -24,11 +24,13 @@ private:
     void initialize();
     void handleEvent(const SDL_Event& event);
     void update(double deltaTime);
+    void advanceClock(Uint64 now);
     void render();
     void shutdown();
     // 菜单操作与状态切换后的输入／界面刷新。
     void applyAction(MenuAction action);
     void refreshState();
+    void changeDisplay(bool fullscreen);
 
     std::unique_ptr<SDL_Window, SdlDeleter> window_;
     std::unique_ptr<SDL_Renderer, SdlDeleter> renderer_;
@@ -36,8 +38,12 @@ private:
     std::unique_ptr<GameGraphics> graphics_;
     std::unique_ptr<Menu> menu_;
     GameFlow flow_;
+    Settings settings_;
+    std::filesystem::path settingsPath_;
+    bool settingsOpen_ = false;
+    std::string settingsStatus_;
     Input input_;
-    FixedStep clock_;
+    GameClock clock_;
     bool sdlInitialized_ = false;
     bool ttfInitialized_ = false;
     bool running_ = false;

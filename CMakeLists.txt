@@ -22,6 +22,7 @@ add_library(zombie_runtime
     src/item.cpp
     src/game_flow.cpp
     src/menu.cpp
+    src/settings.cpp
 )
 target_link_libraries(zombie_runtime PUBLIC zombie_dependencies)
 target_include_directories(zombie_runtime PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
