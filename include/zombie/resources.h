@@ -19,6 +19,8 @@ struct SdlDeleter {
 // 借用 renderer；本对象必须先于 renderer 和 TTF 子系统销毁。
 class Resources {
 public:
+    // 默认根目录为可执行文件旁的 assets，独立于进程的当前工作目录。
+    // 显式 root 用于测试或工具指定资源目录。
     explicit Resources(SDL_Renderer* renderer, std::filesystem::path root = {});
     SDL_Texture* texture(const std::string& relativePath);
     TTF_Font* font(const std::string& relativePath, float pointSize);

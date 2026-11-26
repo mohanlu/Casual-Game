@@ -76,6 +76,17 @@ void testResources() {
         std::unique_ptr<SDL_Renderer, zombie::SdlDeleter> renderer(SDL_CreateRenderer(window.get(), nullptr));
         check(renderer != nullptr, SDL_GetError());
         zombie::Resources resources(renderer.get());
+        const auto expectedRoot = std::filesystem::u8path(SDL_GetBasePath()) / "assets";
+        check(resources.root().is_absolute() && resources.root() == expectedRoot,
+            "Resources must resolve relative to the executable");
+        check(resources.texture("images/atlas.png") != nullptr, "Bundled atlas");
+        check(resources.font("images/ui.ttf", 18) != nullptr, "Bundled font");
+        for (const char* notice : {"NOTICE.md", "licenses/wenquanyi/GPL-2.0.txt",
+                 "licenses/wenquanyi/README.upstream", "licenses/wenquanyi/AUTHORS",
+                 "licenses/wenquanyi/GFDL-1.2.txt", "licenses/wenquanyi/upstream-source.zip"}) {
+            check(std::filesystem::is_regular_file(resources.root() / "images" / notice),
+                "Bundled asset notices or font source missing");
+        }
         std::filesystem::create_directories(resources.root());
         const auto fixture = resources.root() / "runtime-test.bmp";
         SDL_Surface* surface = SDL_CreateSurface(2, 2, SDL_PIXELFORMAT_RGBA32);
@@ -118,6 +129,93 @@ void testLifecycle() {
     check(window.run() == 1, "Initialization failure exit code");
     check(SDL_WasInit(0) == 0 && TTF_WasInit() == 0, "Partial initialization leak");
     SDL_ResetHint(SDL_HINT_RENDER_DRIVER);
+}
+
+void testGameFlow() {
+    zombie::GameFlow flow;
+    using S = zombie::GameState;
+    check(flow.state() == S::MainMenu && !flow.resume() && !flow.finishGame(true), "Initial state guards");
+    check(flow.startGame() && flow.state() == S::Playing, "Start game");
+    flow.update(1);
+    check(flow.pause() && !flow.finishGame(false), "Pause transition");
+    flow.update(10);
+    check(flow.playTime() == 1, "Pause must freeze world time");
+    check(flow.resume() && flow.finishGame(true) && flow.state() == S::Victory, "Victory transition");
+    flow.update(10);
+    check(!flow.resume() && !flow.pause() && flow.playTime() == 1, "Victory must stay frozen");
+    check(flow.returnToMainMenu() && flow.startGame() && flow.playTime() == 0, "Fresh session");
+    check(flow.finishGame(false) && flow.state() == S::Defeat && !flow.resume(), "Defeat transition");
+    check(flow.returnToMainMenu(), "Return after defeat");
+}
+
+void testMenus() {
+    check(SDL_Init(SDL_INIT_VIDEO) && TTF_Init(), SDL_GetError());
+    {
+        std::unique_ptr<SDL_Window, zombie::SdlDeleter> window(SDL_CreateWindow("menus", 960, 720, SDL_WINDOW_RESIZABLE));
+        std::unique_ptr<SDL_Renderer, zombie::SdlDeleter> renderer(SDL_CreateRenderer(window.get(), nullptr));
+        check(renderer != nullptr, SDL_GetError());
+        SDL_SetRenderLogicalPresentation(renderer.get(), 960, 720, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+        SDL_SetRenderDrawBlendMode(renderer.get(), SDL_BLENDMODE_BLEND);
+        zombie::Resources resources(renderer.get());
+        zombie::GameGraphics graphics;
+        graphics.load(resources, renderer.get());
+        zombie::Menu menu;
+        using S = zombie::GameState;
+        using A = zombie::MenuAction;
+        const std::array<S, 5> states{S::MainMenu, S::Playing, S::Paused, S::Victory, S::Defeat};
+        const std::array<const char*, 5> names{"main-menu", "playing", "paused", "victory", "defeat"};
+        for (size_t index = 0; index < states.size(); ++index) {
+            menu.rebuild(states[index], resources, renderer.get());
+            SDL_SetRenderDrawColor(renderer.get(), 24, 28, 34, 255);
+            SDL_RenderClear(renderer.get());
+            for (int y = 0; y < 720; y += 64) {
+                for (int x = 0; x < 960; x += 64) {
+                    graphics.sprite(zombie::SpriteId::ground).draw(renderer.get(),
+                        {static_cast<float>(x), static_cast<float>(y), 64, 64});
+                }
+            }
+            menu.draw(renderer.get());
+            if (const char* output = SDL_getenv("ZOMBIE_UI_SNAPSHOTS")) {
+                std::filesystem::create_directories(output);
+                std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> snapshot(
+                    SDL_RenderReadPixels(renderer.get(), nullptr), SDL_DestroySurface);
+                check(snapshot != nullptr, SDL_GetError());
+                check(IMG_SavePNG(snapshot.get(), (std::filesystem::u8path(output) /
+                    (std::string(names[index]) + ".png")).u8string().c_str()), SDL_GetError());
+            }
+            SDL_Event event{};
+            event.type = SDL_EVENT_KEY_DOWN;
+            event.key.scancode = SDL_SCANCODE_RETURN;
+            const A first = states[index] == S::MainMenu ? A::Start : states[index] == S::Playing ? A::None :
+                states[index] == S::Paused ? A::Resume : A::MainMenu;
+            check(menu.handleEvent(event) == first, "Menu first action");
+            event.key.repeat = true;
+            check(menu.handleEvent(event) == A::None, "Repeated confirmation");
+        }
+        menu.rebuild(S::MainMenu, resources, renderer.get());
+        SDL_Event event{};
+        event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        event.button.button = SDL_BUTTON_LEFT;
+        event.button.x = 480; event.button.y = 380;
+        check(menu.handleEvent(event) == A::None, "Mouse down should not activate");
+        event.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+        menu.handleEvent(event);
+        event.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        check(menu.handleEvent(event) == A::None, "Focus loss cancels click");
+        event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        menu.handleEvent(event);
+        event.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        check(menu.handleEvent(event) == A::Start, "Mouse click activation");
+        SDL_SetWindowSize(window.get(), 1280, 720);
+        SDL_PumpEvents();
+        event.button.windowID = SDL_GetWindowID(window.get());
+        event.button.x = 640; event.button.y = 380;
+        check(SDL_ConvertEventToRenderCoordinates(renderer.get(), &event), SDL_GetError());
+        check(std::abs(event.button.x - 480) < 1 && std::abs(event.button.y - 380) < 1,
+            "Resized letterbox mouse coordinates");
+    }
+    TTF_Quit();
+    SDL_Quit();
 }
 
 void testGraphics() {
@@ -165,10 +263,10 @@ void testGraphics() {
         pixel(16, 16, 0, 255, 0);
         check(graphics.sprite(zombie::actorSprite(zombie::ActorType::zombie, zombie::VisualState::dead))
             .source.y == 32, "Death state selects second row");
+        zombie::Resources bundledResources(renderer.get());
         zombie::TextLabel label;
-        // 仅测试时读取本机字体，不将系统字体复制到项目或发布包。
-        auto* font = resources.font("C:/Windows/Fonts/arial.ttf", 18);
-        check(font == resources.font("C:/Windows/Fonts/arial.ttf", 18), "Font cache");
+        auto* font = bundledResources.font("images/ui.ttf", 18);
+        check(font == bundledResources.font("images/ui.ttf", 18), "Font cache");
         label.set(renderer.get(), font, "HP 100");
         check(label.width() > 0 && label.height() > 0, "Text texture dimensions");
         label.draw(renderer.get(), 0, 32);
@@ -194,6 +292,9 @@ int main() {
         std::cout << "Resources passed" << std::endl;
         testGraphics();
         std::cout << "Graphics passed" << std::endl;
+        testGameFlow();
+        testMenus();
+        std::cout << "Game flow and menus passed" << std::endl;
         testLifecycle();
         std::cout << "Runtime foundation checks passed\n";
         return 0;

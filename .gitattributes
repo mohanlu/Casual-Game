@@ -13,3 +13,4 @@ CMakeLists.txt text eol=lf
 *.ps1 text eol=crlf
 *.png binary
 *.ttf binary
+*.zip binary
