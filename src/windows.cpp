@@ -22,9 +22,14 @@ void Windows::initialize() {
     renderer_.reset(SDL_CreateRenderer(window_.get(), nullptr));
     require(renderer_ != nullptr, "SDL_CreateRenderer");
     vsync_ = SDL_SetRenderVSync(renderer_.get(), 1);
+    require(SDL_SetRenderLogicalPresentation(renderer_.get(), 960, 720, SDL_LOGICAL_PRESENTATION_LETTERBOX), "Logical viewport");
+    require(SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND), "UI blending");
     resources_ = std::make_unique<Resources>(renderer_.get());
     graphics_ = std::make_unique<GameGraphics>();
     graphics_->load(*resources_, renderer_.get());
+    flow_ = GameFlow{};
+    menu_ = std::make_unique<Menu>();
+    refreshState();
     focused_ = (SDL_GetWindowFlags(window_.get()) & SDL_WINDOW_INPUT_FOCUS) != 0;
     minimized_ = false;
     input_ = {};
@@ -40,13 +45,16 @@ int Windows::run() {
             const auto frameStart = SDL_GetTicksNS();
             double elapsed = static_cast<double>(frameStart - previous) / 1'000'000'000.0;
             previous = frameStart;
+            const auto revision = flow_.revision();
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
+                require(SDL_ConvertEventToRenderCoordinates(renderer_.get(), &event), "Input coordinates");
                 handleEvent(event);
                 // 恢复窗口时丢弃后台时间，不进行补帧。
                 if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED ||
                     event.type == SDL_EVENT_WINDOW_RESTORED) { elapsed = 0; }
             }
+            if (revision != flow_.revision()) { elapsed = 0; }
             if (!running_) { break; }
             if (focused_ && !minimized_) {
                 clock_.advance(elapsed, [this](double dt) {
@@ -85,24 +93,44 @@ void Windows::handleEvent(const SDL_Event& event) {
     case SDL_EVENT_WINDOW_RESTORED: minimized_ = false; break;
     default: break;
     }
+    if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) { menu_->handleEvent(event); }
+    if (!running_ || !focused_) { return; }
+    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
+        (event.key.scancode == SDL_SCANCODE_ESCAPE || event.key.scancode == SDL_SCANCODE_SPACE)) {
+        if (flow_.state() == GameState::Playing) {
+            flow_.pause();
+            refreshState();
+        } else if (flow_.state() == GameState::Paused) {
+            flow_.resume();
+            refreshState();
+        }
+        return;
+    }
+    applyAction(menu_->handleEvent(event));
 }
 
 void Windows::update(double deltaTime) {
-    (void)deltaTime;
-    // TODO: 在固定时间步内消费 input_，更新菜单及游戏状态。
+    if (flow_.state() != GameState::Playing) { return; }
+    flow_.update(deltaTime);
+    // TODO: 在此接入玩家、僵尸和补给更新；胜败调用 finishGame()。
 }
 
 void Windows::render() {
-    // 使用窗口当前尺寸的默认视口；缩放窗口无需重建渲染器。
     require(SDL_SetRenderDrawColor(renderer_.get(), 24, 28, 34, 255), "Draw color");
     require(SDL_RenderClear(renderer_.get()), "Render clear");
-    showMainMenu();
-    graphics_->drawPreview(renderer_.get());
+    for (int y = 0; y < 720; y += 64) {
+        for (int x = 0; x < 960; x += 64) {
+            graphics_->sprite(SpriteId::ground).draw(renderer_.get(),
+                {static_cast<float>(x), static_cast<float>(y), 64, 64});
+        }
+    }
+    menu_->draw(renderer_.get());
     require(SDL_RenderPresent(renderer_.get()), "Render present");
 }
 
 void Windows::shutdown() {
     running_ = false;
+    menu_.reset();
     graphics_.reset();
     resources_.reset();
     renderer_.reset();
@@ -113,8 +141,28 @@ void Windows::shutdown() {
     clock_.reset();
 }
 
-void Windows::showMainMenu() {
-    // TODO: 实现开始菜单的布局、绘制和按钮交互。
+void Windows::refreshState() {
+    clock_.reset();
+    input_.reset();
+    menu_->rebuild(flow_.state(), *resources_, renderer_.get());
+}
+
+void Windows::applyAction(MenuAction action) {
+    bool changed = false;
+    switch (action) {
+    case MenuAction::Start: changed = flow_.startGame(); break;
+    case MenuAction::Resume: changed = flow_.resume(); break;
+    case MenuAction::MainMenu: changed = flow_.returnToMainMenu(); break;
+    case MenuAction::Quit: running_ = false; break;
+    default: break;
+    }
+    if (changed) { refreshState(); }
+}
+
+bool Windows::finishGame(bool won) {
+    if (!running_ || !flow_.finishGame(won)) { return false; }
+    refreshState();
+    return true;
 }
 
 } // namespace zombie

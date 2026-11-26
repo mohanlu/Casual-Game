@@ -47,7 +47,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Configuration Release
 ```
 
-`src/main.cpp` 仅调用 `Windows::run()`。程序创建 960×720 可调整大小的深色窗口；关闭窗口退出。Esc 等按键由输入层记录，暂停菜单在 D02 接入。
+`src/main.cpp` 仅调用 `Windows::run()`。程序创建 960×720 可调整大小的窗口并显示开始菜单。开始后进入场景占位页，Esc／空格暂停和继续；结算画面仅允许返回菜单或退出。界面等比例缩放，鼠标坐标转换到逻辑视口。
 
 逻辑按 60 Hz 固定步长更新，渲染优先使用垂直同步，无垂直同步时限速至约 60 FPS。失焦或最小化时停止逻辑更新并清空按键状态，恢复时丢弃后台经过的时间；单帧最多追赶 0.25 秒。
 
@@ -117,3 +117,17 @@ Release 发布包的 DLL／资源收集与打包在 D08 完成。
 - 使用本机真实视频驱动完成短时窗口创建、渲染和正常关闭；初始化失败返回非零退出码并清理子系统。
 - 从项目外工作目录运行测试仍能加载可执行文件旁的测试资源。
 - 菜单绘制、图集与字体素材接入、具体游戏逻辑留在后续阶段实现。
+
+## 菜单与状态验证（2026-11-26）
+
+- 接入用户字体，检查 MainMenu、Playing、Paused、Victory、Defeat 五种状态的实际渲染截图，中文及按钮布局正常。
+- Debug／Release 测试通过：状态转换限制、暂停／结算时间冻结、新局计时重置、键盘确认、鼠标点击与失焦取消、缩放后坐标转换。
+- `GameFlow` 定义状态规则；`Menu` 定义界面；`Windows::finishGame(bool won)` 是后续战斗逻辑的胜败入口。
+- 截图可通过环境变量 `ZOMBIE_UI_SNAPSHOTS` 指定输出目录后执行 `scripts/build.ps1 -Test` 导出。
+
+## 资源分发验证（2026-11-26）
+
+- `Resources` 默认从可执行文件所在目录的 `assets/` 加载；初始化失败时报告具体原因。
+- CTest 在独立的 `build/<配置>/test-working-directory/` 工作目录执行，测试真实图集、随包字体及说明文件加载；测试不再读取 Windows 系统字体。
+- Debug／Release 构建及测试通过。构建复制完整 `src/images/`，包括资源说明、字体许可证、嵌入例外、作者名单及固定版本的上游源文件归档。
+- 用户的 `ui.ttf` 与上游 WenQuanYi Bitmap Song 16px 文件逐字节一致；来源、版本及 SHA-256 记录在 [随包资源说明](../src/images/NOTICE.md)。

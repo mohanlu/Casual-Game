@@ -20,6 +20,8 @@ add_library(zombie_runtime
     src/graphics.cpp
     src/entity.cpp
     src/item.cpp
+    src/game_flow.cpp
+    src/menu.cpp
 )
 target_link_libraries(zombie_runtime PUBLIC zombie_dependencies)
 target_include_directories(zombie_runtime PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -31,7 +33,7 @@ add_custom_target(copy_assets ALL
         "-DDESTINATION=$<TARGET_FILE_DIR:ZombieGame>/assets/images"
         "-DBINARY_ROOT=${CMAKE_BINARY_DIR}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/config/cmake/CopyAssets.cmake"
-    COMMENT "Copy images and fonts"
+    COMMENT "Copy images, fonts, licenses and font sources"
 )
 add_dependencies(ZombieGame copy_assets)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -42,7 +44,10 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(runtime_tests tests/runtime_tests.cpp)
     target_link_libraries(runtime_tests PRIVATE zombie_runtime)
+    add_dependencies(runtime_tests copy_assets)
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-working-directory")
     add_test(NAME runtime_foundation COMMAND runtime_tests)
     set_tests_properties(runtime_foundation PROPERTIES TIMEOUT 15
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-working-directory"
         ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
 endif()

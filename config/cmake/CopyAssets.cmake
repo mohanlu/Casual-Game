@@ -1,4 +1,4 @@
-# 只同步构建目录中的图片和字体，删除源目录已移除的同类旧文件。
+# 图片、字体及授权/源文件说明一起复制；删除源目录已移除的旧 PNG/TTF。
 cmake_path(IS_PREFIX BINARY_ROOT "${DESTINATION}" NORMALIZE inside_build)
 if(NOT inside_build)
     message(FATAL_ERROR "Asset destination must be inside the build directory")
@@ -11,4 +11,4 @@ foreach(old_file IN LISTS old_files)
         file(REMOVE "${old_file}")
     endif()
 endforeach()
-file(COPY "${SOURCE}/" DESTINATION "${DESTINATION}")
+file(COPY "${SOURCE}/" DESTINATION "${DESTINATION}" PATTERN ".gitkeep" EXCLUDE)

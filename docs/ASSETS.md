@@ -4,7 +4,7 @@
 
 已使用内置 image_gen 生成下面列出的 10 张图片，并转换为 32×32 PNG，保存至 `src/images/`。同时提供按既定顺序拼接的 `atlas.png`（160×64），程序优先加载图集。
 
-玩家和僵尸各有正常、受伤、死亡三种状态；角色与物品保留透明通道，地面与墙体为不透明贴图。`ui.ttf` 尚待接入。
+玩家和僵尸各有正常、受伤、死亡三种状态；角色与物品保留透明通道，地面与墙体为不透明贴图。用户提供的 `ui.ttf` 已接入中文菜单。
 
 - [放大预览](assets-preview.png)
 - [生成提示词记录](imagegen-prompts.json)（内置工具生成；尺寸转换与图集拼装为确定性处理）
@@ -38,7 +38,32 @@
 |---|---|
 | `ui.ttf` | TrueType 字体，包含中文、英文字母、数字及常用标点；支持随游戏分发 |
 
-字体也放到 `src/images/ui.ttf`，方便这次集中收集。当前预览字号为 24，后续 HUD 可以使用其他字号。素材与字体的授权说明可一起放入此目录，例如 `LICENSE.txt`。
+字体放在 `src/images/ui.ttf`。目前使用文泉驿点阵宋体 16px 的 TTF 转换版，文件与上游固定提交逐字节一致，只改文件名。字号由各界面指定。
+
+## 资源定位与随包分发
+
+`Resources` 使用 `SDL_GetBasePath()` 定位可执行文件目录，默认资源根为其下的 `assets/`；不使用当前工作目录，也不回退到源码目录或系统字体。菜单加载 `images/ui.ttf`，图集加载 `images/atlas.png`。
+
+构建会递归复制 `src/images/` 中的素材、来源说明、许可证和字体上游源文件，输出布局如下（Debug／Release 相同）：
+
+```text
+bin/
+  ZombieGame.exe
+  assets/images/
+    atlas.png、各独立 PNG、ui.ttf
+    NOTICE.md
+    licenses/wenquanyi/
+      GPL-2.0.txt
+      README.upstream
+      AUTHORS
+      GFDL-1.2.txt
+      CONVERSION.upstream.md
+      upstream-source.zip
+```
+
+发布时保留完整 `assets/` 目录。图片来源、字体版权及 GPL v2 字体嵌入例外见 [随包资源说明](../src/images/NOTICE.md)。字体的源文件归档和转换说明随包提供，不需要收件人联网获取。替换字体时同时更新授权说明及源文件，不能直接沿用原字体的许可证。
+
+本项完成资源准备；完整 Release 包的 DLL 收集和打包仍属于 D08。
 
 ## 方案二：一张图集
 
@@ -59,9 +84,9 @@
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Run
 ```
 
-构建会把 `src/images/` 同步到程序旁的 `assets/images/`；运行时不依赖当前工作目录。窗口按图集顺序排列素材，以 2 倍尺寸展示，最后一行额外显示旋转 90° 的玩家。字体存在时显示中英文预览标题。
+构建会把 `src/images/` 同步到程序旁的 `assets/images/`；运行时不依赖当前工作目录。目前启动进入正式菜单布局，已替换原素材预览页。素材总览见本文的放大预览链接；`GameGraphics::drawPreview()` 接口仍可用于开发检查。
 
-缺少的图片显示为空位，缺少字体则省略标题，控制台输出提示；尺寸错误或文件损坏会报告路径／尺寸错误并退出。运行中替换素材后，需要退出、重新构建并运行。
+缺少的图片会在控制台输出提示；菜单需要 `ui.ttf`。尺寸错误、文件损坏或缺少菜单字体会报告错误并退出。运行中替换素材后，需要退出、重新构建并运行。
 
 ## 已完成的代码接口
 
@@ -78,4 +103,4 @@ const auto id = zombie::actorSprite(zombie::ActorType::player, zombie::VisualSta
 graphics.sprite(id).draw(renderer, {x, y, 32, 32}, angleDegrees);
 ```
 
-实际伤害事件、死亡停留时长、墙体碰撞与回血效果在对应玩法阶段接入。本次代码完成素材读取与绘制，最终美术效果待你放入素材后验收。
+实际伤害事件、死亡停留时长、墙体碰撞与回血效果在对应玩法阶段接入。当前素材已接入并通过图像与中文菜单渲染检查。
