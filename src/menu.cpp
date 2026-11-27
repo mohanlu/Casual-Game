@@ -7,14 +7,19 @@ void fill(SDL_Renderer* renderer, SDL_FRect rect, SDL_Color color) {
     if (!SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a) ||
         !SDL_RenderFillRect(renderer, &rect)) { throw std::runtime_error(SDL_GetError()); }
 }
-void centered(const TextLabel& label, SDL_Renderer* renderer, float y) {
-    label.draw(renderer, (960 - label.width()) / 2, y);
+void centered(const TextLabel& label, SDL_Renderer* renderer, float y, float width, float offsetY) {
+    label.draw(renderer, (width - label.width()) / 2, y + offsetY);
 }
 }
 
 void Menu::rebuild(GameState state, Resources& resources, SDL_Renderer* renderer,
-    const Settings& settings, bool settingsOpen, const char* status) {
+    const Settings& settings, bool settingsOpen, const char* status, bool controlsOpen) {
+    const float targetWidth = width_, targetHeight = height_;
+    width_ = 960; height_ = 720;
     settingsOpen_ = settingsOpen;
+    controlsOpen_ = settingsOpen && controlsOpen;
+    controlKeys_.clear();
+    controlDescriptions_.clear();
     state_ = state;
     buttons_.clear();
     selected_ = -1;
@@ -33,6 +38,7 @@ void Menu::rebuild(GameState state, Resources& resources, SDL_Renderer* renderer
     default: break;
     }
     if (settingsOpen_) { title = "设置"; }
+    if (controlsOpen_) { title = "键位说明"; subtitle = ""; }
     eyebrow_.set(renderer, small, "生存行动  /  DEMO 01", accent);
     title_.set(renderer, large, title, accent);
     subtitle_.set(renderer, regular, subtitle, {186, 194, 187, 255});
@@ -45,6 +51,28 @@ void Menu::rebuild(GameState state, Resources& resources, SDL_Renderer* renderer
         button.label.set(renderer, regular, text);
         buttons_.push_back(std::move(button));
     };
+    if (controlsOpen_) {
+        auto binding = [&](const char* key, const char* description) {
+            TextLabel keyLabel, descriptionLabel;
+            keyLabel.set(renderer, small, key, {210, 192, 128, 255});
+            descriptionLabel.set(renderer, small, description, {186, 194, 187, 255});
+            controlKeys_.push_back(std::move(keyLabel));
+            controlDescriptions_.push_back(std::move(descriptionLabel));
+        };
+        binding("Esc / 空格 / P", "暂停 / 继续游戏");
+        binding("鼠标左键（按住）", "点击/单发射击(连发)");
+        binding("Esc", "返回上一级");
+        binding("W", "向上移动");
+        binding("S", "向下移动");
+        binding("A", "向左移动");
+        binding("D", "向右移动");
+        binding("鼠标移动", "瞄准");
+        add("", MenuAction::Back);
+        buttons_.back().rectangle = {24, 24, 48, 48};
+        buttons_.back().icon = resources.texture("images/back.png");
+        setSize(targetWidth, targetHeight);
+        return;
+    }
     if (settingsOpen_) {
         const bool canChangeZombies = state == GameState::MainMenu;
         zombieLabel_.set(renderer, regular, canChangeZombies ? "僵尸数量" : "僵尸数量（本局已锁定）", {210, 192, 128, 255});
@@ -64,8 +92,12 @@ void Menu::rebuild(GameState state, Resources& resources, SDL_Renderer* renderer
         option("200", MenuAction::Zombies200, {548, 362, 112, 48}, settings.zombieCount == 200, canChangeZombies);
         option("小窗", MenuAction::Windowed, {300, 462, 174, 48}, !settings.fullscreen);
         option("全屏", MenuAction::Fullscreen, {486, 462, 174, 48}, settings.fullscreen);
-        add("返回", MenuAction::Back);
-        buttons_.back().rectangle = {310, 548, 340, 48};
+        add("键位", MenuAction::Controls);
+        buttons_.back().rectangle = {306, 548, 348, 48};
+        add("", MenuAction::Back);
+        buttons_.back().rectangle = {24, 24, 48, 48};
+        buttons_.back().icon = resources.texture("images/back.png");
+        setSize(targetWidth, targetHeight);
         return;
     }
     if (state == GameState::MainMenu) {
@@ -85,6 +117,17 @@ void Menu::rebuild(GameState state, Resources& resources, SDL_Renderer* renderer
             buttons_[i].rectangle = {310, 345 + static_cast<float>(i) * 60, 340, 48};
         }
     }
+    setSize(targetWidth, targetHeight);
+}
+
+void Menu::setSize(float width, float height) {
+    for (auto& button : buttons_) {
+        if (button.icon) { continue; } // 返回图标固定在左上角。
+        button.rectangle.x += (width - width_) / 2;
+        button.rectangle.y += (height - height_) / 2;
+    }
+    if (width != width_ || height != height_) { pressed_ = -1; selected_ = -1; }
+    width_ = width; height_ = height;
 }
 
 int Menu::hit(float x, float y) const {
@@ -114,28 +157,44 @@ MenuAction Menu::handleEvent(const SDL_Event& event) {
 }
 
 void Menu::draw(SDL_Renderer* renderer) const {
+    const float offsetX = (width_ - 960) / 2, offsetY = (height_ - 720) / 2;
     if (state_ == GameState::Playing && !settingsOpen_) {
-        fill(renderer, {0, 0, 960, 125}, {12, 19, 21, 235});
-        centered(title_, renderer, 18);
-        centered(subtitle_, renderer, 83);
-        fill(renderer, {0, 655, 960, 65}, {12, 19, 21, 235});
-        centered(footer_, renderer, 677);
+        fill(renderer, {0, 0, width_, 125}, {12, 19, 21, 235});
+        centered(title_, renderer, 18, width_, 0);
+        centered(subtitle_, renderer, 83, width_, 0);
+        fill(renderer, {0, height_ - 65, width_, 65}, {12, 19, 21, 235});
+        centered(footer_, renderer, height_ - 43, width_, 0);
         return;
     }
-    fill(renderer, {0, 0, 960, 720}, {8, 13, 15, 190});
-    fill(renderer, {230, 140, 500, settingsOpen_ ? 490.0f : 455.0f}, {19, 29, 31, 245});
-    fill(renderer, {230, 140, 500, 3}, {162, 148, 102, 255});
-    centered(eyebrow_, renderer, 173);
-    centered(title_, renderer, 220);
-    centered(subtitle_, renderer, 294);
-    if (settingsOpen_) {
-        zombieLabel_.draw(renderer, 300, 327);
-        displayLabel_.draw(renderer, 300, 427);
-        centered(status_, renderer, 516);
+    // 所有菜单直接覆盖整个逻辑画面，不透出地面或保留浮层边框。
+    fill(renderer, {0, 0, width_, height_}, {19, 29, 31, 255});
+    centered(eyebrow_, renderer, 173, width_, offsetY);
+    centered(title_, renderer, 220, width_, offsetY);
+    centered(subtitle_, renderer, 294, width_, offsetY);
+    if (controlsOpen_) {
+        for (size_t i = 0; i < controlKeys_.size(); ++i) {
+            const float y = 322 + static_cast<float>(i) * 34;
+            controlKeys_[i].draw(renderer, 270 + offsetX, y + offsetY);
+            controlDescriptions_[i].draw(renderer, 450 + offsetX, y + offsetY);
+        }
+    } else if (settingsOpen_) {
+        zombieLabel_.draw(renderer, 300 + offsetX, 327 + offsetY);
+        displayLabel_.draw(renderer, 300 + offsetX, 427 + offsetY);
+        centered(status_, renderer, 516, width_, offsetY);
     }
     for (size_t i = 0; i < buttons_.size(); ++i) {
         const auto& b = buttons_[i];
         const bool selected = static_cast<int>(i) == selected_;
+        if (b.icon) {
+            if (selected) { fill(renderer, b.rectangle, {73, 83, 66, 255}); }
+            const SDL_FRect destination{b.rectangle.x + 8, b.rectangle.y + 8, 32, 32};
+            const SDL_Color color = selected ? SDL_Color{235, 218, 160, 255} : SDL_Color{210, 192, 128, 255};
+            if (!SDL_SetTextureColorMod(b.icon, color.r, color.g, color.b) ||
+                !SDL_RenderTexture(renderer, b.icon, nullptr, &destination)) {
+                throw std::runtime_error(SDL_GetError());
+            }
+            continue;
+        }
         fill(renderer, b.rectangle, !b.enabled ? SDL_Color{27, 36, 37, 255} :
             selected ? SDL_Color{73, 83, 66, 255} : SDL_Color{35, 46, 47, 255});
         if (selected) { fill(renderer, {b.rectangle.x, b.rectangle.y, 4, b.rectangle.h}, {221, 201, 136, 255}); }
@@ -149,6 +208,6 @@ void Menu::draw(SDL_Renderer* renderer) const {
         b.label.draw(renderer, b.rectangle.x + (b.rectangle.w - b.label.width()) / 2 + (b.option ? 14 : 0),
             b.rectangle.y + (b.rectangle.h - b.label.height()) / 2);
     }
-    centered(footer_, renderer, 632);
+    centered(footer_, renderer, 632, width_, offsetY);
 }
 } // namespace zombie

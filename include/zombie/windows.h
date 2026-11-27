@@ -26,6 +26,7 @@ private:
     void update(double deltaTime);
     void advanceClock(Uint64 now);
     void render();
+    void updateViewport();
     void shutdown();
     // 菜单操作与状态切换后的输入／界面刷新。
     void applyAction(MenuAction action);
@@ -41,6 +42,7 @@ private:
     Settings settings_;
     std::filesystem::path settingsPath_;
     bool settingsOpen_ = false;
+    bool controlsOpen_ = false;
     std::string settingsStatus_;
     Input input_;
     GameClock clock_;
@@ -50,6 +52,7 @@ private:
     bool focused_ = true;
     bool minimized_ = false;
     bool vsync_ = false;
+    float viewWidth_ = 960, viewHeight_ = 720;
 };
 
 } // namespace zombie
