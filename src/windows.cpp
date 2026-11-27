@@ -1,4 +1,5 @@
 #include "zombie/windows.h"
+#include "zombie/viewport.h"
 #include <stdexcept>
 
 namespace zombie {
@@ -18,6 +19,7 @@ void Windows::initialize() {
     ttfInitialized_ = true;
     settings_ = {};
     settingsOpen_ = false;
+    controlsOpen_ = false;
     settingsStatus_.clear();
     char* preferences = SDL_GetPrefPath("ZombieGame", "ZombieGame");
     settingsPath_ = preferences ? std::filesystem::u8path(preferences) / "settings.ini" : std::filesystem::path{};
@@ -35,7 +37,7 @@ void Windows::initialize() {
     renderer_.reset(SDL_CreateRenderer(window_.get(), nullptr));
     require(renderer_ != nullptr, "SDL_CreateRenderer");
     vsync_ = SDL_SetRenderVSync(renderer_.get(), 1);
-    require(SDL_SetRenderLogicalPresentation(renderer_.get(), 960, 720, SDL_LOGICAL_PRESENTATION_LETTERBOX), "Logical viewport");
+    updateViewport();
     require(SDL_SetRenderDrawBlendMode(renderer_.get(), SDL_BLENDMODE_BLEND), "UI blending");
     resources_ = std::make_unique<Resources>(renderer_.get());
     graphics_ = std::make_unique<GameGraphics>();
@@ -60,6 +62,7 @@ int Windows::run() {
                 // 先结算事件发生前的运行时间，再切换暂停／恢复状态。
                 const auto now = SDL_GetTicksNS();
                 advanceClock(event.common.timestamp == 0 ? now : std::min(now, event.common.timestamp));
+                updateViewport();
                 require(SDL_ConvertEventToRenderCoordinates(renderer_.get(), &event), "Input coordinates");
                 handleEvent(event);
                 clock_.setRunning(running_ && focused_ && !minimized_ && flow_.state() == GameState::Playing);
@@ -114,6 +117,11 @@ void Windows::handleEvent(const SDL_Event& event) {
         }
         return;
     }
+    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && flow_.state() == GameState::Playing &&
+        (event.key.scancode == SDL_SCANCODE_V || event.key.scancode == SDL_SCANCODE_X)) {
+        finishGame(event.key.scancode == SDL_SCANCODE_V);
+        return;
+    }
     applyAction(menu_->handleEvent(event));
 }
 
@@ -131,13 +139,22 @@ void Windows::update(double deltaTime) {
     // TODO: 在此接入玩家、僵尸和补给更新；胜败调用 finishGame()。
 }
 
+void Windows::updateViewport() {
+    const auto size = fitViewport(renderer_.get());
+    viewWidth_ = size.width; viewHeight_ = size.height;
+    if (menu_) { menu_->setSize(viewWidth_, viewHeight_); }
+}
+
 void Windows::render() {
+    updateViewport();
     require(SDL_SetRenderDrawColor(renderer_.get(), 24, 28, 34, 255), "Draw color");
     require(SDL_RenderClear(renderer_.get()), "Render clear");
-    for (int y = 0; y < 720; y += 64) {
-        for (int x = 0; x < 960; x += 64) {
-            graphics_->sprite(SpriteId::ground).draw(renderer_.get(),
-                {static_cast<float>(x), static_cast<float>(y), 64, 64});
+    if (flow_.state() == GameState::Playing) {
+        for (int y = 0; y < viewHeight_; y += 64) {
+            for (int x = 0; x < viewWidth_; x += 64) {
+                graphics_->sprite(SpriteId::ground).draw(renderer_.get(),
+                    {static_cast<float>(x), static_cast<float>(y), 64, 64});
+            }
         }
     }
     menu_->draw(renderer_.get());
@@ -159,7 +176,8 @@ void Windows::shutdown() {
 
 void Windows::refreshState() {
     input_.reset();
-    menu_->rebuild(flow_.state(), *resources_, renderer_.get(), settings_, settingsOpen_, settingsStatus_.c_str());
+    menu_->setSize(viewWidth_, viewHeight_);
+    menu_->rebuild(flow_.state(), *resources_, renderer_.get(), settings_, settingsOpen_, settingsStatus_.c_str(), controlsOpen_);
 }
 
 void Windows::applyAction(MenuAction action) {
@@ -173,14 +191,22 @@ void Windows::applyAction(MenuAction action) {
     case MenuAction::MainMenu: changed = flow_.returnToMainMenu(); break;
     case MenuAction::Settings:
         settingsOpen_ = true;
+        controlsOpen_ = false;
         settingsStatus_.clear();
         changed = true;
         break;
-    case MenuAction::Back: settingsOpen_ = false; changed = true; break;
+    case MenuAction::Controls:
+        if (settingsOpen_) { controlsOpen_ = true; changed = true; }
+        break;
+    case MenuAction::Back:
+        if (controlsOpen_) { controlsOpen_ = false; }
+        else { settingsOpen_ = false; }
+        changed = true;
+        break;
     case MenuAction::Zombies50:
     case MenuAction::Zombies100:
     case MenuAction::Zombies200:
-        if (settingsOpen_ && flow_.state() == GameState::MainMenu) {
+        if (settingsOpen_ && !controlsOpen_ && flow_.state() == GameState::MainMenu) {
             settings_.zombieCount = action == MenuAction::Zombies50 ? 50 : action == MenuAction::Zombies100 ? 100 : 200;
             changed = true;
         }

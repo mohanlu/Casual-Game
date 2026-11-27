@@ -1,4 +1,5 @@
 #include "zombie/windows.h"
+#include "zombie/viewport.h"
 #include <SDL3_image/SDL_image.h>
 #include <cmath>
 #include <iostream>
@@ -226,15 +227,25 @@ void testPauseSettingsFlow() {
             SDL_Event e{};
             e.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
             SDL_PushEvent(&e);
+            click(480, 450); // 主菜单 -> 设置
+            click(380, 570); // 设置 -> 键位
+            if (escapeBack) { sendKey(SDL_SCANCODE_ESCAPE); }
+            else { click(48, 48); }
+            click(48, 48); // 设置 -> 主菜单
             click(480, 380); // 开始游戏
             sendKey(SDL_SCANCODE_P);
             sendKey(SDL_SCANCODE_P, true); // 长按不能恢复
             click(480, 425); // 暂停 -> 设置
             sendKey(SDL_SCANCODE_SPACE); // 设置内不能恢复游戏
             sendKey(SDL_SCANCODE_P);
+            click(380, 570); // 暂停设置 -> 键位
+            sendKey(SDL_SCANCODE_SPACE);
+            sendKey(SDL_SCANCODE_P); // 键位界面也不能恢复游戏
+            if (escapeBack) { sendKey(SDL_SCANCODE_ESCAPE); }
+            else { click(48, 48); } // 键位 -> 设置
             click(600, 385); // 已锁定的僵尸选项
             if (escapeBack) { sendKey(SDL_SCANCODE_ESCAPE); }
-            else { click(480, 570); }
+            else { click(48, 48); }
             click(480, 370); // 返回暂停菜单后继续
             sendKey(SDL_SCANCODE_ESCAPE); // 再次暂停
             e.type = SDL_EVENT_QUIT;
@@ -244,6 +255,41 @@ void testPauseSettingsFlow() {
         events.join();
         check(result == 0 && window.state() == zombie::GameState::Paused,
             "Settings must return to pause menu and preserve pause hotkeys");
+    }
+}
+
+void testResultKeys() {
+    using S = zombie::GameState;
+    const std::array<S, 4> expected{S::Victory, S::Defeat, S::Playing, S::Paused};
+    for (int scenario = 0; scenario < 4; ++scenario) {
+        zombie::Windows window;
+        std::thread events([scenario] {
+            SDL_Delay(200);
+            SDL_Event e{};
+            e.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
+            SDL_PushEvent(&e);
+            auto key = [](SDL_Scancode code, bool repeat = false) {
+                SDL_Event k{};
+                k.type = SDL_EVENT_KEY_DOWN; k.key.scancode = code; k.key.repeat = repeat;
+                SDL_PushEvent(&k);
+            };
+            key(SDL_SCANCODE_V); // 主菜单不能触发结算。
+            key(SDL_SCANCODE_X);
+            e.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            e.button.button = SDL_BUTTON_LEFT; e.button.x = 480; e.button.y = 380;
+            SDL_PushEvent(&e);
+            e.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            SDL_PushEvent(&e);
+            if (scenario == 3) { key(SDL_SCANCODE_P); }
+            if (scenario == 0) { key(SDL_SCANCODE_V); key(SDL_SCANCODE_X); }
+            else if (scenario == 1) { key(SDL_SCANCODE_X); key(SDL_SCANCODE_V); }
+            else { key(SDL_SCANCODE_V, scenario == 2); key(SDL_SCANCODE_X, scenario == 2); }
+            e.type = SDL_EVENT_QUIT;
+            SDL_PushEvent(&e);
+        });
+        const int result = window.run();
+        events.join();
+        check(result == 0 && window.state() == expected[scenario], "Result key state and repeat guards");
     }
 }
 
@@ -298,7 +344,7 @@ void testMenus() {
         std::unique_ptr<SDL_Window, zombie::SdlDeleter> window(SDL_CreateWindow("menus", 960, 720, SDL_WINDOW_RESIZABLE));
         std::unique_ptr<SDL_Renderer, zombie::SdlDeleter> renderer(SDL_CreateRenderer(window.get(), nullptr));
         check(renderer != nullptr, SDL_GetError());
-        SDL_SetRenderLogicalPresentation(renderer.get(), 960, 720, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+        zombie::fitViewport(renderer.get());
         SDL_SetRenderDrawBlendMode(renderer.get(), SDL_BLENDMODE_BLEND);
         zombie::Resources resources(renderer.get());
         zombie::GameGraphics graphics;
@@ -387,7 +433,7 @@ void testMenus() {
         check(click(350, 385) == A::Zombies50 && click(475, 385) == A::Zombies100 &&
             click(600, 385) == A::Zombies200, "Zombie choices");
         check(click(380, 485) == A::Windowed && click(570, 485) == A::Fullscreen, "Display choices");
-        check(click(480, 570) == A::Back && click(250, 650) == A::None, "Settings return and outside click");
+        check(click(48, 48) == A::Back && click(250, 650) == A::None, "Settings return and outside click");
         menu.rebuild(S::Paused, resources, renderer.get(), settings);
         check(click(480, 425) == A::Settings, "Pause menu settings entry");
         check(click(480, 485) == A::MainMenu && click(480, 545) == A::Quit, "Pause menu remaining buttons");
@@ -396,7 +442,7 @@ void testMenus() {
             click(600, 385) == A::None, "Paused zombie choices must be disabled");
         check(click(380, 485) == A::Windowed && click(570, 485) == A::Fullscreen,
             "Paused display choices remain enabled");
-        check(click(480, 570) == A::Back, "Paused settings return");
+        check(click(48, 48) == A::Back, "Paused settings return");
         SDL_RenderClear(renderer.get());
         menu.draw(renderer.get());
         if (const char* output = SDL_getenv("ZOMBIE_UI_SNAPSHOTS")) {
@@ -404,9 +450,27 @@ void testMenus() {
                 SDL_RenderReadPixels(renderer.get(), nullptr), SDL_DestroySurface);
             check(snapshot && IMG_SavePNG(snapshot.get(), (std::filesystem::u8path(output) / "paused-settings.png").u8string().c_str()), SDL_GetError());
         }
+        for (S origin : {S::MainMenu, S::Paused}) {
+            menu.rebuild(origin, resources, renderer.get(), settings, true);
+            check(click(380, 570) == A::Controls, "Settings controls entry");
+            menu.rebuild(origin, resources, renderer.get(), settings, true, "", true);
+            check(click(48, 48) == A::Back, "Controls back icon");
+            check(click(480, 570) == A::None, "Old bottom return button removed");
+            check(click(350, 385) == A::None && click(570, 485) == A::None,
+                "Controls page must not expose settings actions");
+            SDL_RenderClear(renderer.get());
+            menu.draw(renderer.get());
+            if (const char* output = SDL_getenv("ZOMBIE_UI_SNAPSHOTS")) {
+                std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> snapshot(
+                    SDL_RenderReadPixels(renderer.get(), nullptr), SDL_DestroySurface);
+                check(snapshot && IMG_SavePNG(snapshot.get(), (std::filesystem::u8path(output) /
+                    (origin == S::Paused ? "paused-controls.png" : "controls.png")).u8string().c_str()), SDL_GetError());
+            }
+        }
         if (std::string(SDL_GetCurrentVideoDriver()) != "dummy") {
             check(SDL_SetWindowFullscreen(window.get(), true) && SDL_SyncWindow(window.get()), "Enter fullscreen");
             check((SDL_GetWindowFlags(window.get()) & SDL_WINDOW_FULLSCREEN) != 0, "Fullscreen flag");
+            zombie::fitViewport(renderer.get());
             float x = 0, y = 0;
             check(SDL_RenderCoordinatesToWindow(renderer.get(), 480, 485, &x, &y), "Fullscreen coordinate mapping");
             SDL_Event mapped{};
@@ -418,13 +482,51 @@ void testMenus() {
             check(SDL_SetWindowFullscreen(window.get(), false) && SDL_SyncWindow(window.get()), "Leave fullscreen");
             check((SDL_GetWindowFlags(window.get()) & SDL_WINDOW_FULLSCREEN) == 0, "Windowed flag");
         }
-        SDL_SetWindowSize(window.get(), 1280, 720);
-        SDL_PumpEvents();
-        event.button.windowID = SDL_GetWindowID(window.get());
-        event.button.x = 640; event.button.y = 380;
-        check(SDL_ConvertEventToRenderCoordinates(renderer.get(), &event), SDL_GetError());
-        check(std::abs(event.button.x - 480) < 1 && std::abs(event.button.y - 380) < 1,
-            "Resized letterbox mouse coordinates");
+        // 宽屏和窄屏均覆盖全部像素，鼠标映射到同一逻辑按钮。
+        for (const auto size : {std::pair<int, int>{1280, 720}, {1920, 1080}, {720, 960}}) {
+            check(SDL_SetWindowSize(window.get(), size.first, size.second), SDL_GetError());
+            SDL_SyncWindow(window.get());
+            SDL_PumpEvents();
+            const auto layout = zombie::fitViewport(renderer.get());
+            menu.setSize(layout.width, layout.height);
+            menu.rebuild(S::MainMenu, resources, renderer.get());
+            float scaleX = 0, scaleY = 0;
+            check(SDL_GetRenderScale(renderer.get(), &scaleX, &scaleY) && std::abs(scaleX - scaleY) < 1e-6,
+                "Text and buttons must keep uniform proportions");
+            const float targetX = 350 + (layout.width - 960) / 2;
+            const float targetY = 380 + (layout.height - 720) / 2;
+            event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            event.button.windowID = SDL_GetWindowID(window.get());
+            event.button.x = targetX * scaleX;
+            event.button.y = targetY * scaleY;
+            check(SDL_ConvertEventToRenderCoordinates(renderer.get(), &event), SDL_GetError());
+            check(std::abs(event.button.x - targetX) < 1 && std::abs(event.button.y - targetY) < 1,
+                "Resized uniform mouse coordinates");
+            menu.handleEvent(event);
+            event.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            check(menu.handleEvent(event) == A::Start, "Uniformly scaled button click");
+            for (int page = 0; page < 6; ++page) {
+                const S state = page == 1 ? S::Paused : page == 2 ? S::Victory :
+                    page == 3 ? S::Defeat : S::MainMenu;
+                menu.rebuild(state, resources, renderer.get(), settings, page >= 4, "", page == 5);
+                SDL_SetRenderDrawColor(renderer.get(), 255, 0, 255, 255);
+                SDL_RenderClear(renderer.get());
+                menu.draw(renderer.get());
+                std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> snapshot(
+                    SDL_RenderReadPixels(renderer.get(), nullptr), SDL_DestroySurface);
+                check(snapshot != nullptr, SDL_GetError());
+                for (const auto point : {SDL_Point{0, 0}, SDL_Point{snapshot->w - 1, 0},
+                        SDL_Point{0, snapshot->h - 1}, SDL_Point{snapshot->w - 1, snapshot->h - 1}}) {
+                    Uint8 r, g, b, alpha;
+                    check(SDL_ReadSurfacePixel(snapshot.get(), point.x, point.y, &r, &g, &b, &alpha), SDL_GetError());
+                    check(r == 19 && g == 29 && b == 31, "Menu must fill every corner without bars or scene bleed");
+                }
+                if (const char* output = SDL_getenv("ZOMBIE_UI_SNAPSHOTS")) {
+                    const auto name = "filled-" + std::to_string(size.first) + "-" + std::to_string(page) + ".png";
+                    check(IMG_SavePNG(snapshot.get(), (std::filesystem::u8path(output) / name).u8string().c_str()), SDL_GetError());
+                }
+            }
+        }
     }
     TTF_Quit();
     SDL_Quit();
@@ -510,6 +612,7 @@ int main() {
         testMenus();
         std::cout << "Game flow and menus passed" << std::endl;
         testPauseSettingsFlow();
+        testResultKeys();
         testLifecycle();
         std::cout << "Runtime foundation checks passed\n";
         return 0;

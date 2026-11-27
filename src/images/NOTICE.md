@@ -1,10 +1,12 @@
 # 随包资源来源与分发说明
 
-核对日期：2026-11-26。本文件适用于同目录内的图片和字体，随游戏资源一起保留。
+核对日期：2026-11-28。本文件适用于同目录内的图片和字体，随游戏资源一起保留。
 
 ## 图片
 
 `player.png`、`player_hurt.png`、`player_dead.png`、`zombie.png`、`zombie_hurt.png`、`zombie_dead.png`、`ammo.png`、`health.png`、`ground.png`、`wall.png` 为本项目按用户要求通过 OpenAI 内置 image_gen 生成的素材，随后缩放为 32×32；`atlas.png` 由这些图片拼装而成。生成记录在项目的 `docs/imagegen-prompts.json`。
+
+`back.png` 为 2026-11-28 通过 OpenAI 内置 image_gen 生成的透明背景回弯返回箭头，用于键位页左上角；原始 PNG 保留透明通道，运行时缩放及着色。生成提示词见 `docs/back-icon-prompt.json`。
 
 这些图片作为本项目素材随游戏分发，不属于文泉驿字体的 GPL 授权范围。OpenAI 使用条款中的 Content 条款说明：在用户与 OpenAI 之间、适用法律允许的范围内，输出权利归用户；输出可能并非唯一。本说明记录素材来源，不另行为图片指定开源许可证。
 
